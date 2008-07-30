@@ -1,0 +1,4 @@
+twitter_account_details:
+  username: put_username_here
+  password: put_password_here
+data_directory: /var/www/patatat
