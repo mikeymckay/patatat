@@ -1,0 +1,1 @@
+You will need to copy config.yml.example to config.yml and then put in actual twitter accounts. You will also need to install some gems - according to what is "require"d at the top of the scripts.

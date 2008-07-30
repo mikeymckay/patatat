@@ -1,17 +1,19 @@
 #!/usr/bin/ruby
 
-$working_directory ||= "/var/www/patatat"
-
-Dir.chdir $working_directory
+path_to_patatat = File.expand_path(File.dirname(__FILE__))
 
 require 'rubygems'
 require 'fsdb'
 require 'time'
 require 'cgi'
-require 'tweeter.rb'
+require 'yaml'
+require path_to_patatat + '/tweeter.rb'
 
+$config = YAML.load(File.open(path_to_patatat + "/patatat.conf"))
 
-# Monkeypatch some append action
+Dir.chdir path_to_patatat
+
+# Monkeypatch some append action since I couldn't get normal array appends to work with fsdb arrays
 class FSDB::Database
   def append(database_path, element)
     self[database_path] = [] if self[database_path].nil?
@@ -21,13 +23,12 @@ class FSDB::Database
   end
 end
 
-
 class Patatat < Tweeter
   attr_accessor :botname, :database_path, :last_processed_at
 
   def initialize(username,password)
     super(username, password)
-    @database = FSDB::Database.new($working_directory+"/database/")
+    @database = FSDB::Database.new($config["data_directory"]+"/database/")
     @last_processed_at = @database['last_processed_at']
     Dir.mkdir(".theyoke") unless File.directory?(".theyoke")
   end
@@ -51,9 +52,12 @@ class Patatat < Tweeter
       headline.gsub!(/ \/ /,"/")
       headline.gsub!(/Google News/,"GoogleNews")
       headline.gsub!(/Technorati Search/,"Technorati")
+      headline.gsub!(/Friends' Facebook Status Updates/,"Friend: ")
       # Camel case no spaces FTW? CamelCaseNoSpacesFTW?:
       # "There was more chaos".gsub(/ (.)/){|match| match.upcase}.gsub(/ /,"")
-      send_direct_message(screen_name, headline[0..135]) unless headline.empty?
+      headline.gsub(/ (.)/){|match| match.upcase}.gsub(/ /,"") if headline.length > 135 && headline.length < 150 # Use camelcase if it seems like we can make the whole thing fit, otherwise truncate
+      message_to_send = headline[0..133] #truncate but leave room for twitter specific stuff
+      send_direct_message(screen_name, message_to_send) unless headline.empty? or @database["#{screen_name}/messages_sent"].include?(message_to_send)
     }
   end
 
@@ -97,12 +101,7 @@ class Patatat < Tweeter
         send_direct_message(screen_name, "you will now receive an sms whenever the technorati feed '#{$1}' is updated")
         subscribe_technorati(screen_name, $1)
       when /help/i
-        help_string = ""
-        ["google", "technorati"].each{|service|
-          help_string += "Add #{service} feed: d #{@username} #{service} topic. "
-        }
-        help_string += "Add rss: d #{@username} http://... . Remove: d #{@username} remove topic. Show current: d #{@username} show feeds."
-        send_direct_message(screen_name, help_string)
+        send_help_message(screen_name)
       when /remove (.+)/i
         remove(screen_name,$1)
       when /show feeds/i
@@ -111,6 +110,15 @@ class Patatat < Tweeter
           send_direct_message(screen_name, "subscribed to #{feed} (forward this with 'd #{@username} remove' at front to remove")
         }
     end
+  end
+
+  def send_help_message(screen_name)
+    help_string = ""
+    ["google", "technorati"].each{|service|
+      help_string += "Add #{service} feed: d #{@username} #{service} topic. "
+    }
+    help_string += "Add rss: d #{@username} http://... . Remove: d #{@username} remove topic. Show current: d #{@username} show feeds."
+    send_direct_message(screen_name, help_string)
   end
 
   def subscribe_technorati(screen_name, search_term)
@@ -128,6 +136,7 @@ class Patatat < Tweeter
     file = File.open(yoke_feeds_file, File::WRONLY|File::APPEND|File::CREAT)
     file.puts(feed)
     file.close
+    send_rss_updates(screen_name)
   end
 
   def remove(screen_name, feed_to_remove)
@@ -164,23 +173,21 @@ end
 #Only execute this code if it was launched from the command line
 if __FILE__ == $0
   pid = fork do
-    Signal.trap('HUP', 'IGNORE') # Don't die upon logout
+    Signal.trap('HUP', 'IGNORE') # Don't die upon logout - this doesn't seem to work I use monit instead
     puts "Starting Daemon"
 
-     twitter_account_details = YAML.load(File.open("config.yml"))["twitter_account_details"]
-    patatat = Patatat.new(twitter_account_details["username"], twitter_account_details["password"])
+    patatat = Patatat.new($config["twitter_account_details"]["username"], $config["twitter_account_details"]["password"])
 #  patatat.reset if reset
 
     while(true)
-      puts "\nWaking up"
       patatat.process
       allowed_requests_per_hour = 20
       requests_per_process = 2
       sleep_time = requests_per_process * 60 * 60/allowed_requests_per_hour #twitter varies the request limit
-      puts "Sleeping for #{sleep_time}"
+      Tweeter.yell "Sleeping for #{sleep_time}"
       sleep sleep_time
     end
   end
-  `echo #{pid} > #{$working_directory}/patatat.pid`
+  `echo #{pid} > #{$config["path_to_patatat"]}/patatat.pid`
   Process.detach(pid)
 end

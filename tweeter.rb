@@ -5,19 +5,20 @@ require 'net/http'
 require 'uri'
 require 'json'
 
+# $config |= YAML.load(File.open(path_to_patatat + "/tweeter.conf"))
+
 class Tweeter
   attr_accessor :username, :password, :friends
 
   def initialize(username,password)
     @username = username  
     @password = password
-    $working_directory ||= "/var/www/patatat"
     Tweeter.yell "Patatat initialized"
   end
 
   def self.yell(msg) 
     # stupid simple logging:
-    f = File.open(File.expand_path(File.dirname(__FILE__) + "/yell.log"),"a") 
+    f = File.open(File.expand_path($config["data_directory"] + "/yell.log"),"a") 
     f.puts msg 
     f.close
   end
