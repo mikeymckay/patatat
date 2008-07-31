@@ -188,6 +188,6 @@ if __FILE__ == $0
       sleep sleep_time
     end
   end
-  `echo #{pid} > #{$config["path_to_patatat"]}/patatat.pid`
+  `echo #{pid} > #{$config["data_directory"]}/patatat.pid`
   Process.detach(pid)
 end
