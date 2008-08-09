@@ -50,13 +50,13 @@ class Patatat < Tweeter
       headline.gsub!(/ : /,": ")
       headline.gsub!(/ - /,"-")
       headline.gsub!(/ \/ /,"/")
-      headline.gsub!(/Google News/,"GoogleNews")
-      headline.gsub!(/Technorati Search/,"Technorati")
-      headline.gsub!(/Friends' Facebook Status Updates/,"Friend: ")
+      $config["shortcuts"].each{|site,settings|
+        headline.gsub!(/#{settings["regex"]}/,settings["replacement"]
+      }
       # Camel case no spaces FTW? CamelCaseNoSpacesFTW?:
       # "There was more chaos".gsub(/ (.)/){|match| match.upcase}.gsub(/ /,"")
-      headline.gsub(/ (.)/){|match| match.upcase}.gsub(/ /,"") if headline.length > 135 && headline.length < 150 # Use camelcase if it seems like we can make the whole thing fit, otherwise truncate
-      message_to_send = headline[0..133] #truncate but leave room for twitter specific stuff
+      headline = headline.gsub(/ (.)/){|match| match.upcase}.gsub(/ /,"") if headline.length > 120 # Use camelcase if it seems like we can make the whole thing fit, otherwise truncate
+      message_to_send = headline[0..120] #truncate but leave room for twitter specific stuff
       send_direct_message(screen_name, message_to_send) unless headline.empty? or @database["#{screen_name}/messages_sent"].include?(message_to_send)
     }
   end
@@ -92,41 +92,35 @@ class Patatat < Tweeter
   def process_message(message, screen_name)
     case message
       when /(http:\/\/.+)/i
-        send_direct_message(screen_name, "you will now receive an sms whenever '#{$1}' is updated")
+        send_direct_message(screen_name, "you will receive an sms whenever '#{$1}' is updated")
         subscribe(screen_name, $1)
-      when /google (.+)/i
-        send_direct_message(screen_name, "you will now receive an sms whenever the google news feed '#{$1}' is updated")
-        subscribe_google(screen_name, $1)
-      when /technorati (.+)/i
-        send_direct_message(screen_name, "you will now receive an sms whenever the technorati feed '#{$1}' is updated")
-        subscribe_technorati(screen_name, $1)
       when /help/i
         send_help_message(screen_name)
       when /remove (.+)/i
         remove(screen_name,$1)
       when /show feeds/i
-        yoke_feeds_file = ".theyoke/#{screen_name}/feeds"
-        File.open(yoke_feeds_file).each { |feed|
-          send_direct_message(screen_name, "subscribed to #{feed} (forward this with 'd #{@username} remove' at front to remove")
+        send_direct_message(screen_name, feed_list_compact(screen_name).join(" |"))
+      else
+        $config["shortcuts"].each{|shortcut, settings|
+          next unless settings["url"]
+          subscribe_shortcut(screen_name, $1, setting["url"]) if message.match(/#{shortcut} (.+)/)
         }
     end
   end
 
+
   def send_help_message(screen_name)
     help_string = ""
-    ["google", "technorati"].each{|service|
-      help_string += "Add #{service} feed: d #{@username} #{service} topic. "
+    $config["shortcuts"].each{|shortcut, settings|
+      next unless settings["url"]
+      help_string += "Add #{shortcut} feed: d #{@username} #{shortcut} topic. "
     }
     help_string += "Add rss: d #{@username} http://... . Remove: d #{@username} remove topic. Show current: d #{@username} show feeds."
     send_direct_message(screen_name, help_string)
   end
 
-  def subscribe_technorati(screen_name, search_term)
-    subscribe(screen_name,"http://feeds.technorati.com/search/#{CGI.escape(search_term)}?language=en")
-  end
-
-  def subscribe_google(screen_name, search_term)
-    subscribe(screen_name,"http://news.google.com/news?hl=en&ned=&q=#{CGI.escape(search_term)}&ie=UTF-8&output=rss")
+  def subscribe_shortcut(screen_name, search_term, url)
+    subscribe(screen_name, url.gsub(/SEARCH_TERM/, search_term)
   end
 
   def subscribe(screen_name, feed)
@@ -152,6 +146,22 @@ class Patatat < Tweeter
       file.print lines                         # write out modified lines to original file
       file.truncate(file.pos)                     # truncate to new length
     end                                       # file is automatically close
+  end
+
+  def feed_list(screen_name)
+    yoke_feeds_file = ".theyoke/#{screen_name}/feeds"
+    File.open(yoke_feeds_file).collect{|feed|feed}
+  end
+
+  def feed_list_compact(screen_name)
+    # Try and give a short representation otherwise use the feed
+    feed_list(screen_name).collect{|feed|
+      $config["shortcuts"].collect{|shortcut, settings|
+        next unless settings["url"]
+        regex = settings["url"].gsub(/SEARCH_TERM/, "(.*)")
+        "#{shortcut} #{$1}" if feed.match(/#{regex}/)
+      }.compact.first rescue feed
+    }.flatten
   end
 
   def send_direct_message(recipient, message)

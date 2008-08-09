@@ -2,3 +2,15 @@ twitter_account_details:
   username: put_username_here
   password: put_password_here
 data_directory: /var/www/patatat
+shortcuts:
+  google:
+    url: "http://news.google.com/news?hl=en&ned=&q=SEARCH_TERM&ie=UTF-8&output=rss"
+    regex: "Google News"
+    replacement: "GoogleNews"
+  technorati:
+    url: "http://feeds.technorati.com/search/SEARCH_TERM?language=en"
+    regex: "Technorati Search"
+    replacement: "Technorati"
+  facebook:
+    regex: ".* Friends' Facebook Status Updates: "
+    replacement: ""
