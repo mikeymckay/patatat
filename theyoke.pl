@@ -15,7 +15,7 @@ use Term::Size;
 use Getopt::Long;
 use HTML::FormatText;
 
-my($USAGE) = "Usage: $0: [[--debug]|[-d]]+ [--test] [--description] [--link] [--no-title] [--no-feedname] [[--version] [-V]] [[--columns=int] [-c=int]] [--numfeeds=number] [--onlyfeeds=regexp] [--reversetime] [--username=s] [feedurl]...\n";
+my($USAGE) = "Usage: $0: [[--debug]|[-d]]+ [--test] [--description] [--link] [--no-title] [--no-feedname] [[--version] [-V]] [[--columns=int] [-c=int]] [--numfeeds=number] [--onlyfeeds=regexp] [--reversetime] [--username=s] [--configdir=s] [feedurl]...\n";
 my $version = "1.23-baka";
 #my $agent = "TheYoke/$version (+http://www.mackers.com/projects/theyoke/) ";
 my $agent = "Firefox";
@@ -25,12 +25,16 @@ my (%OPTIONS);
 my $exit_val = 0;
 
 Getopt::Long::Configure("bundling", "no_ignore_case", "no_auto_abbrev", "no_getopt_compat", "require_order");
-GetOptions(\%OPTIONS, 'debug|d+', 'test', 'description', 'link', 'title', 'no-title', 'no-feedname', 'version|V+', 'columns|c=i', 'numfeeds=i', 'onlyfeeds=s', 'reversetime', 'username=s') || die $USAGE;
+GetOptions(\%OPTIONS, 'debug|d+', 'test', 'description', 'link', 'title', 'no-title', 'no-feedname', 'version|V+', 'columns|c=i', 'numfeeds=i', 'onlyfeeds=s', 'reversetime', 'username=s', 'configdir=s') || die $USAGE;
 
 
 my $config_dir = ".theyoke/";
+if ($OPTIONS{'configdir'}) {
+  $config_dir = $OPTIONS{'configdir'} . "/"
+}
+
 if ($OPTIONS{'username'}) {
-  $config_dir = ".theyoke/" . $OPTIONS{'username'} . "/";
+  $config_dir = $config_dir . $OPTIONS{'username'} . "/";
 }
 
 my $feeds_dir = $config_dir . ".feeds/";

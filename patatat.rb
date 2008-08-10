@@ -1,17 +1,11 @@
 #!/usr/bin/ruby
 
-path_to_patatat = File.expand_path(File.dirname(__FILE__))
-
 require 'rubygems'
 require 'fsdb'
 require 'time'
 require 'cgi'
 require 'yaml'
-require path_to_patatat + '/tweeter.rb'
-
-$config = YAML.load(File.open(path_to_patatat + "/patatat.conf"))
-
-Dir.chdir path_to_patatat
+require File.expand_path(File.dirname(__FILE__)) + '/tweeter.rb'
 
 # Monkeypatch some append action since I couldn't get normal array appends to work with fsdb arrays
 class FSDB::Database
@@ -30,7 +24,7 @@ class Patatat < Tweeter
     super(username, password)
     @database = FSDB::Database.new($config["data_directory"]+"/database/")
     @last_processed_at = @database['last_processed_at']
-    Dir.mkdir(".theyoke") unless File.directory?(".theyoke")
+    Dir.mkdir("#{$config["data_directory"]}/.theyoke") unless File.directory?("#{$config["data_directory"]}/.theyoke")
   end
 
   def reset
@@ -39,7 +33,7 @@ class Patatat < Tweeter
 
   def send_rss_updates(screen_name)
     Tweeter.yell "Checking for rss updates for #{screen_name}:"
-    yoke_command = "./theyoke.pl --columns=150 --username=#{screen_name}" # This is dangerous! - imagine nefarious screen names
+    yoke_command = "./theyoke.pl --columns=150 --username=#{screen_name} --configdir=#{$config["data_directory"]}/.theyoke" # This is dangerous! - imagine nefarious screen names
     Tweeter.yell yoke_command
     rss_update = `#{yoke_command}`
     Tweeter.yell rss_update
@@ -51,7 +45,7 @@ class Patatat < Tweeter
       headline.gsub!(/ - /,"-")
       headline.gsub!(/ \/ /,"/")
       $config["shortcuts"].each{|site,settings|
-        headline.gsub!(/#{settings["regex"]}/,settings["replacement"]
+        headline.gsub!(/#{settings["regex"]}/,settings["replacement"])
       }
       # Camel case no spaces FTW? CamelCaseNoSpacesFTW?:
       # "There was more chaos".gsub(/ (.)/){|match| match.upcase}.gsub(/ /,"")
@@ -120,7 +114,7 @@ class Patatat < Tweeter
   end
 
   def subscribe_shortcut(screen_name, search_term, url)
-    subscribe(screen_name, url.gsub(/SEARCH_TERM/, search_term)
+    subscribe(screen_name, url.gsub(/SEARCH_TERM/, search_term))
   end
 
   def subscribe(screen_name, feed)
@@ -156,8 +150,10 @@ class Patatat < Tweeter
   def feed_list_compact(screen_name)
     # Try and give a short representation otherwise use the feed
     feed_list(screen_name).collect{|feed|
+      puts "#{feed}"
       $config["shortcuts"].collect{|shortcut, settings|
         next unless settings["url"]
+        puts settings["url"]
         regex = settings["url"].gsub(/SEARCH_TERM/, "(.*)")
         "#{shortcut} #{$1}" if feed.match(/#{regex}/)
       }.compact.first rescue feed
@@ -180,11 +176,19 @@ class Patatat < Tweeter
 
 end
 
+
 #Only execute this code if it was launched from the command line
 if __FILE__ == $0
   pid = fork do
     Signal.trap('HUP', 'IGNORE') # Don't die upon logout - this doesn't seem to work I use monit instead
     puts "Starting Daemon"
+
+
+
+
+    path_to_patatat = File.expand_path(File.dirname(__FILE__))
+    $config = YAML.load(File.open(path_to_patatat + "/patatat.conf"))
+    Dir.chdir path_to_patatat
 
     patatat = Patatat.new($config["twitter_account_details"]["username"], $config["twitter_account_details"]["password"])
 #  patatat.reset if reset
